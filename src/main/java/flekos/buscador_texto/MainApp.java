@@ -1,7 +1,6 @@
-package flekos.chuletario;
+package flekos.buscador_texto;
 
 import java.io.BufferedReader;
-import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -9,7 +8,6 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -27,8 +25,6 @@ public class MainApp {
 	 */
 	public static void main(String[] args) {
 
-		List<ApartadoDTO> listaFicheros = new ArrayList<>();
-
 		String extension = "xhtml";
 
 		if (args != null && args.length == 1) {
@@ -42,64 +38,43 @@ public class MainApp {
 		List<String> files;
 		try {
 
+			/*
+			 * primero definimos la estructura, en la que definimos los apartados que vamos
+			 * a buscar, el patrón para cada apartado y la lista de coincidencias que se
+			 * obtienen
+			 * 
+			 */
+
+			HashMap<String, HashMap<String, List<String>>> apartadosMap = new HashMap<>();
+			initializeApartados(apartadosMap, "** acciones **", "action=\"");
+			initializeApartados(apartadosMap, "** acciones_listener **", "actionlistener=\"");
+			initializeApartados(apartadosMap, "** includes **", "<ui:include");
+			initializeApartados(apartadosMap, "** listas_obtenerLista **", "listMethod=\"");
+			initializeApartados(apartadosMap, "** listas_obtenerTotal **", "countMethod=\"");
+
 			// lanzamos la búsqueda
 			files = findFiles(Paths.get(""), extension);
 			if (files.isEmpty()) {
 				System.out.println("No se han encontrado ficheros");
 			} else {
 				files.forEach(x -> {
-					searchMatchsInFile(x, listaFicheros);
+					searchMatchsInFile(x, apartadosMap);
 					System.out.println("");
 				});
 			}
-
 		} catch (IOException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
 
-		
-		System.out.println("@startuml");
-		System.out.println("* nodo padre");
-		for(ApartadoDTO item: listaFicheros) {
-			System.out.println("** " + item.getArchivo() + ": ");
-			System.out.println("\t- actions");
-			for(String cadena: item.getActions()) {
-				System.out.println("\t\t - " + cadena);
-			}
-			
-			System.out.println("\t- actions listeners");
-			for(String cadena: item.getActionListeners()) {
-				System.out.println("\t\t - " + cadena);
-			}
-			
-			System.out.println("\t- listMethods");
-			for(String cadena: item.getListMethod()) {
-				System.out.println("\t\t - " + cadena);
-			}
-			
-			System.out.println("\t- countMethods");
-			for(String cadena: item.getCountMethod()) {
-				System.out.println("\t\t - " + cadena);
-			}
-			
-			System.out.println("\t- includes");
-			for(String cadena: item.getIncludes()) {
-				System.out.println("\t\t - " + cadena);
-			}
-			System.out.println(";");
-		}
-		System.out.println("@enduml");
-		
 	}
 
 	/**
 	 * Inicializa la estructura de apartados y cadenas buscadas
 	 * 
-	 * @param apartados
-	 * @param apartado      -> apartado que agrupa los resultados coincidentes con
-	 *                      la cadena buscada
-	 * @param cadenaBuscada -> cadena buscada
+	 * @param apartados 
+	 * @param apartado -> apartado que agrupa los resultados coincidentes con la cadena buscada
+	 * @param cadenaBuscada -> cadena buscada 
 	 */
 	public static void initializeApartados(HashMap<String, HashMap<String, List<String>>> apartados, String apartado,
 			String cadenaBuscada) {
@@ -119,29 +94,22 @@ public class MainApp {
 	 * 
 	 * @param fichero -> nombre del fichero en el que se buscarán las cadenas
 	 */
-	public static void searchMatchsInFile(String fichero, List<ApartadoDTO> listaFicheros) {
+	public static void searchMatchsInFile(String fichero, HashMap<String, HashMap<String, List<String>>> apartadosMap) {
 		System.out.println("Fichero -> " + fichero);
 		BufferedReader reader;
 
 		try {
-
-			File archivo = new File(fichero);
-
-			ApartadoDTO apartado = new ApartadoDTO();
-			apartado.setArchivo(archivo.getName());
-			apartado.setRuta(archivo.getAbsolutePath());
-
-			reader = new BufferedReader(new FileReader(archivo));
+			reader = new BufferedReader(new FileReader(fichero));
 			String line = reader.readLine();
 
 			while (line != null) {
 				final String fila = line;
-
-				searchString(fila, "action=\"", apartado.getActions());
-				searchString(fila, "actionlistener=\"", apartado.getActionListeners());
-				searchString(fila, "<ui:include", apartado.getIncludes());
-				searchString(fila, "listMethod=\"", apartado.getListMethod());
-				searchString(fila, "countMethod=\"", apartado.getListMethod());
+				apartadosMap.forEach((key, value) -> {
+					HashMap<String, List<String>> busquedaMap = value;
+					busquedaMap.forEach((keyMap, valueMap) -> {
+						searchString(fila, keyMap, valueMap);
+					});
+				});
 
 				// read next line
 				line = reader.readLine();
@@ -150,16 +118,25 @@ public class MainApp {
 
 			reader.close();
 
-			listaFicheros.add(apartado);
+			apartadosMap.forEach((key, value) -> {
+				System.out.println("\n\t" + key+"\n");
+				HashMap<String, List<String>> busquedaMap = value;
+				busquedaMap.forEach((keyMap, valueMap) -> {
+					for (String item : valueMap) {
+						System.out.println("\t\t" + item);
+					}
+					;
+				});
 
+			});
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
 	}
 
 	/**
-	 * Busca una cadena dentro de una fila y si se encuentra coincidencia se añade a
-	 * lista de coincidencias
+	 * Busca una cadena dentro de una fila y si se encuentra coincidencia se añade a lista de 
+	 * coincidencias
 	 * 
 	 * @param linea
 	 * @param cadenaBuscada
